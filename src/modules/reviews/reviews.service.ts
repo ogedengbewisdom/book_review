@@ -93,6 +93,42 @@ export class ReviewsService {
     }
   }
 
+  async find_book_reviews(book_id: number, pagination: PaginationDto) {
+    const { page = 1, limit = 10 } = pagination;
+
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.reviewRepository
+      .createQueryBuilder('review')
+      .innerJoin('review.book', 'book')
+      .innerJoin('review.user', 'user')
+      .where('review.book_id = :book_id', { book_id })
+      .select([
+        "CONCAT(user.first_name, ' ', user.last_name) AS name",
+        'review.rating',
+        'review.comment',
+      ])
+      .orderBy('review.created_at', 'DESC')
+      .offset(skip)
+      .limit(limit);
+
+    const [reviews, total] = await Promise.all([
+      queryBuilder.getRawMany(),
+      queryBuilder.getCount(),
+    ]);
+
+    return {
+      reviews: plainToInstance(ReviewResponseDto, reviews, {
+        excludeExtraneousValues: true,
+      }),
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+      },
+    };
+  }
   async findOne(id: number) {
     try {
       const review = await this.reviewRepository.findOne({

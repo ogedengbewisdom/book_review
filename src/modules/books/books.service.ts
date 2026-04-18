@@ -15,11 +15,13 @@ import { UserRole } from '../../common/enums';
 import { PaginationDto } from '../../common/interface/interfaces';
 import { plainToInstance } from 'class-transformer';
 import { BookResponseDto } from './dto/book.response.dto';
+import { ReviewsService } from '../reviews/reviews.service';
 
 @Injectable()
 export class BooksService {
   constructor(
     @InjectRepository(Book) private bookRepository: Repository<Book>,
+    private reviewsService: ReviewsService,
   ) {}
   async create(createBookDto: CreateBookDto, author: number) {
     // return 'This action adds a new book';
@@ -53,8 +55,8 @@ export class BooksService {
         .groupBy('book.id')
         .addGroupBy('user.first_name')
         .addGroupBy('user.last_name')
-        .skip(skip)
-        .take(limit);
+        .offset(skip)
+        .limit(limit);
 
       const [books, total] = await Promise.all([
         queryBuilder.getRawMany(),
@@ -80,7 +82,10 @@ export class BooksService {
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, pagination: PaginationDto) {
+    const { page = 1, limit = 10 } = pagination;
+
+    const skip = (page - 1) * limit;
     try {
       const book = await this.bookRepository.findOne({
         where: { id },
@@ -99,8 +104,25 @@ export class BooksService {
       });
 
       if (!book) throw new NotFoundException(`Book with id ${id} not found`);
+
+      const reviews = await this.reviewsService.find_book_reviews(
+        id,
+        pagination,
+      );
+
+      const mapped_reviews = reviews.reviews.map((review) => ({
+        name: review.name,
+        rating: review.rating,
+        comment: review.comment,
+        // pagination: reviews.pagination,
+      }));
       const { user, deleted_at, ...rest } = book;
-      return { ...rest, author: `${user.first_name} ${user.last_name}` };
+      return {
+        ...rest,
+        author: `${user.first_name} ${user.last_name}`,
+        reviews: mapped_reviews,
+        pagination: reviews.pagination,
+      };
     } catch (error) {
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(

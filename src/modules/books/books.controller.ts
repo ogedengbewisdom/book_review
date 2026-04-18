@@ -57,9 +57,13 @@ export class BooksController {
   }
 
   @Public()
+  @ApiQuery({ name: 'pagination', type: PaginationDto })
   @Get(':id')
-  async findOne(@Param('id', ParseParamPipe) id: number) {
-    const result = await this.booksService.findOne(id);
+  async findOne(
+    @Param('id', ParseParamPipe) id: number,
+    @Query() pagination: PaginationDto,
+  ) {
+    const result = await this.booksService.findOne(id, pagination);
     return {
       message: 'Book fetched successfully',
       data: result,
